@@ -1,0 +1,43 @@
+#!/bin/bash
+
+check_window_focused() {
+  awk -F' ' '{
+  if ($1 == "method" && $2 == "call" && $10 == "member=WindowFocused") {
+    print 0
+  } else {
+    print 1
+  }}
+  '
+}
+
+# Track if the last line was from the correct DBus event
+# (i.e., did the previous check_window_focused AWK output 0)
+LAST_LINE_WAS_FOCUSED=1
+
+interface=org.pendo324.PublishResourceOnActivate
+member=WindowFocused
+
+dbus-monitor --profile "interface='$interface',member='$member'" --monitor |
+while read -r line; do
+  if [[ $LAST_LINE_WAS_FOCUSED == 1 ]]; then
+    LINE_CHECK_OUT=$(echo $line | check_window_focused)
+    if [[ $LINE_CHECK_OUT == 0 ]]; then
+      LAST_LINE_WAS_FOCUSED=0
+    fi
+  else
+    WINDOW_NAME=$(echo $line | awk -F' ' '{ gsub(/"/, "", $2); print $2}')
+
+    echo "$WINDOW_NAME"
+
+    if [[ $WINDOW_NAME == "dota2" ]]; then
+      input-remapper-control --command start --device "$1" --preset "Dota"
+    elif [[ $WINDOW_NAME == "steam_app_238960" ]]; then
+      input-remapper-control --command start --device "$1" --preset "PoE"
+    elif [[ $WINDOW_NAME == "csgo_linux64" ]]; then
+      input-remapper-control --command start --device "$1" --preset "CSGO"
+    else
+      input-remapper-control --command start --device "$1" --preset "default"
+    fi
+    LAST_LINE_WAS_FOCUSED=1
+  fi
+done
